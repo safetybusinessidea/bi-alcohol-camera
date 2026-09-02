@@ -80,6 +80,11 @@
       display: none;
     }
 
+    /* selfie preview only */
+    video.frontPreview {
+      transform: scaleX(-1);
+    }
+
     .guide {
       position: absolute;
       inset: 10%;
@@ -97,6 +102,19 @@
       font-size: 13px;
       text-align: center;
       text-shadow: 0 1px 4px #000;
+    }
+
+    .cameraBadge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,.65);
+      border: 1px solid rgba(255,255,255,.25);
+      color: #fff;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      z-index: 5;
     }
 
     .actions {
@@ -143,21 +161,16 @@
   </style>
 </head>
 
-
 <body>
 
 <div class="wrap">
 
   <div class="title">
-
-    <h1>
-      BI Alcohol Camera
-    </h1>
+    <h1>BI Alcohol Camera</h1>
 
     <p>
-      กล้องสดเท่านั้น — หน้านี้ไม่มีปุ่มเลือกไฟล์หรือ Gallery
+      กล้องสดเท่านั้น — ไม่มีปุ่มเลือกไฟล์หรือ Gallery
     </p>
-
   </div>
 
 
@@ -187,6 +200,13 @@
     </canvas>
 
 
+    <div
+      id="cameraBadge"
+      class="cameraBadge">
+      กล้องหลัง
+    </div>
+
+
     <div class="guide"></div>
 
 
@@ -206,6 +226,16 @@
       onclick="startCamera()">
 
       เปิดกล้อง
+    </button>
+
+
+    <button
+      id="btnSwitch"
+      type="button"
+      class="btn btnSecondary hidden"
+      onclick="switchCamera()">
+
+      🔄 สลับกล้องหน้า / หลัง
     </button>
 
 
@@ -261,6 +291,12 @@ let capturedDataUrl = '';
 let capturedWidth = 0;
 let capturedHeight = 0;
 
+/*
+ * environment = กล้องหลัง
+ * user        = กล้องหน้า
+ */
+let currentFacingMode = 'environment';
+
 
 // ============================================================================
 // START
@@ -269,6 +305,9 @@ let capturedHeight = 0;
 window.addEventListener(
   'load',
   function () {
+
+    updateCameraUI();
+
 
     if (isInAppBrowser()) {
 
@@ -325,7 +364,7 @@ async function startCamera() {
       await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: {
-            ideal: 'environment',
+            ideal: currentFacingMode,
           },
           width: {
             ideal: 1280,
@@ -348,10 +387,14 @@ async function startCamera() {
     await video.play();
 
 
+    updateCameraUI();
+
+
     show('video');
     hide('preview');
 
     hide('btnStart');
+    show('btnSwitch');
     show('btnCapture');
 
     hide('btnUse');
@@ -384,6 +427,59 @@ async function startCamera() {
     showMessage(message);
 
   }
+
+}
+
+
+async function switchCamera() {
+
+  currentFacingMode =
+    currentFacingMode === 'environment'
+      ? 'user'
+      : 'environment';
+
+
+  updateCameraUI();
+
+
+  /*
+   * iPhone/Safari มักต้อง stop stream เดิม
+   * ก่อนขออีกกล้องหนึ่ง
+   */
+  await startCamera();
+
+}
+
+
+function updateCameraUI() {
+
+  const video =
+    document.getElementById('video');
+
+
+  const badge =
+    document.getElementById('cameraBadge');
+
+
+  const isFront =
+    currentFacingMode === 'user';
+
+
+  badge.textContent =
+    isFront
+      ? 'กล้องหน้า'
+      : 'กล้องหลัง';
+
+
+  /*
+   * Mirror เฉพาะภาพ Preview ตอนใช้กล้องหน้า
+   * แต่ไฟล์ที่บันทึกจะไม่ Mirror
+   * เพื่อให้ข้อความบนเครื่องตรวจยังอ่านตรง
+   */
+  video.classList.toggle(
+    'frontPreview',
+    isFront
+  );
 
 }
 
@@ -444,6 +540,12 @@ function capturePhoto() {
     );
 
 
+  /*
+   * สำคัญ:
+   * ไม่กลับด้านภาพใน Canvas
+   * ต่อให้หน้า Preview กล้องหน้าเป็นกระจก
+   * ภาพหลักฐานจริงจะยังอ่านค่าบนเครื่องตรวจได้ถูกทิศ
+   */
   ctx.drawImage(
     video,
     0,
@@ -479,6 +581,7 @@ function capturePhoto() {
   show('preview');
 
   hide('btnCapture');
+  hide('btnSwitch');
 
   show('btnUse');
   show('btnRetake');
@@ -501,10 +604,10 @@ function retake() {
   hide('preview');
 
 
-  show('btnStart');
-
-  hide('btnUse');
-  hide('btnRetake');
+  /*
+   * เปิดกลับด้วยกล้องตัวล่าสุดที่ผู้ใช้เลือก
+   */
+  startCamera();
 
 }
 
@@ -540,6 +643,7 @@ function sendPhotoBack() {
       dataUrl: capturedDataUrl,
       width: capturedWidth,
       height: capturedHeight,
+      facingMode: currentFacingMode,
     },
     '*'
   );
