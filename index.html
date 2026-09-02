@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+  <title>BI Alcohol Camera</title>
+
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --panel: #171717;
+      --text: #ffffff;
+      --muted: #b7b7b7;
+      --primary: #695697;
+      --danger: #a9342b;
+      --line: #2e2e2e;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, "Noto Sans Thai", sans-serif;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+
+    .title {
+      text-align: center;
+      margin: 4px 0 12px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 21px;
+    }
+
+    .title p {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .camera {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #000;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+    }
+
+    video,
+    canvas,
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    .guide {
+      position: absolute;
+      inset: 10%;
+      border: 2px dashed rgba(255, 255, 255, .78);
+      border-radius: 14px;
+      pointer-events: none;
+    }
+
+    .guideText {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      color: #fff;
+      font-size: 13px;
+      text-align: center;
+      text-shadow: 0 1px 4px #000;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 9px;
+      margin-top: 12px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 11px;
+      border: 0;
+      color: #fff;
+      font-weight: 800;
+    }
+
+    .btnPrimary {
+      background: var(--primary);
+    }
+
+    .btnSecondary {
+      background: #333;
+    }
+
+    .btnDanger {
+      background: var(--danger);
+    }
+
+    .message {
+      margin-bottom: 12px;
+      padding: 11px;
+      border-radius: 10px;
+      background: #322d1f;
+      color: #ffe7a2;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+
+<body>
+
+<div class="wrap">
+
+  <div class="title">
+
+    <h1>
+      BI Alcohol Camera
+    </h1>
+
+    <p>
+      กล้องสดเท่านั้น — หน้านี้ไม่มีปุ่มเลือกไฟล์หรือ Gallery
+    </p>
+
+  </div>
+
+
+  <div
+    id="message"
+    class="message hidden">
+  </div>
+
+
+  <div class="camera">
+
+    <video
+      id="video"
+      playsinline
+      autoplay
+      muted>
+    </video>
+
+
+    <img
+      id="preview"
+      class="hidden"
+      alt="ภาพที่ถ่าย">
+
+
+    <canvas id="canvas">
+    </canvas>
+
+
+    <div class="guide"></div>
+
+
+    <div class="guideText">
+      กรุณาให้เห็นใบหน้า + เครื่องตรวจ + ค่าบนหน้าจอในภาพเดียวกัน
+    </div>
+
+  </div>
+
+
+  <div class="actions">
+
+    <button
+      id="btnStart"
+      type="button"
+      class="btn btnPrimary"
+      onclick="startCamera()">
+
+      เปิดกล้อง
+    </button>
+
+
+    <button
+      id="btnCapture"
+      type="button"
+      class="btn btnPrimary hidden"
+      onclick="capturePhoto()">
+
+      ถ่ายภาพ
+    </button>
+
+
+    <button
+      id="btnUse"
+      type="button"
+      class="btn btnPrimary hidden"
+      onclick="sendPhotoBack()">
+
+      ใช้รูปนี้
+    </button>
+
+
+    <button
+      id="btnRetake"
+      type="button"
+      class="btn btnSecondary hidden"
+      onclick="retake()">
+
+      ถ่ายใหม่
+    </button>
+
+
+    <button
+      type="button"
+      class="btn btnDanger"
+      onclick="closeCamera()">
+
+      ยกเลิก
+    </button>
+
+  </div>
+
+</div>
+
+
+
+<script>
+
+let stream = null;
+
+let capturedDataUrl = '';
+let capturedWidth = 0;
+let capturedHeight = 0;
+
+
+// ============================================================================
+// START
+// ============================================================================
+
+window.addEventListener(
+  'load',
+  function () {
+
+    if (isInAppBrowser()) {
+
+      showMessage(
+        'หน้านี้กำลังเปิดผ่าน Browser ภายในแอป เช่น LINE ' +
+        'ถ้ากล้องไม่เปิด กรุณาปิดหน้านี้แล้วเปิดระบบหลักใน Safari หรือ Chrome'
+      );
+
+    }
+
+
+    if (
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices.getUserMedia
+    ) {
+
+      showMessage(
+        'Browser นี้ไม่รองรับกล้องสด กรุณาเปิดด้วย Safari หรือ Chrome รุ่นปัจจุบัน'
+      );
+
+    }
+
+  }
+);
+
+
+// ============================================================================
+// CAMERA
+// ============================================================================
+
+async function startCamera() {
+
+  clearMessage();
+
+
+  if (
+    !navigator.mediaDevices ||
+    !navigator.mediaDevices.getUserMedia
+  ) {
+
+    return showMessage(
+      'Browser นี้ไม่รองรับกล้องสด กรุณาเปิดด้วย Safari หรือ Chrome'
+    );
+
+  }
+
+
+  try {
+
+    stopStream();
+
+
+    stream =
+      await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: {
+            ideal: 'environment',
+          },
+          width: {
+            ideal: 1280,
+          },
+          height: {
+            ideal: 960,
+          },
+        },
+        audio: false,
+      });
+
+
+    const video =
+      document.getElementById('video');
+
+
+    video.srcObject = stream;
+
+
+    await video.play();
+
+
+    show('video');
+    hide('preview');
+
+    hide('btnStart');
+    show('btnCapture');
+
+    hide('btnUse');
+    hide('btnRetake');
+
+
+  } catch (err) {
+
+    let message =
+      err && err.message
+        ? err.message
+        : String(err);
+
+
+    if (
+      err &&
+      (
+        err.name === 'NotAllowedError' ||
+        err.name === 'SecurityError'
+      )
+    ) {
+
+      message =
+        'Browser ไม่อนุญาตให้ใช้กล้อง กรุณาตรวจ Permission ของกล้อง ' +
+        'และเปิดหน้านี้ผ่าน Safari หรือ Chrome';
+
+    }
+
+
+    showMessage(message);
+
+  }
+
+}
+
+
+function capturePhoto() {
+
+  const video =
+    document.getElementById('video');
+
+
+  if (
+    !video.videoWidth ||
+    !video.videoHeight
+  ) {
+
+    return showMessage(
+      'กล้องยังไม่พร้อม กรุณารอสักครู่แล้วลองใหม่'
+    );
+
+  }
+
+
+  const maxWidth = 1000;
+
+
+  let width =
+    video.videoWidth;
+
+
+  let height =
+    video.videoHeight;
+
+
+  if (width > maxWidth) {
+
+    height =
+      Math.round(
+        height * maxWidth / width
+      );
+
+    width = maxWidth;
+
+  }
+
+
+  const canvas =
+    document.getElementById('canvas');
+
+
+  canvas.width = width;
+  canvas.height = height;
+
+
+  const ctx =
+    canvas.getContext(
+      '2d',
+      { alpha: false }
+    );
+
+
+  ctx.drawImage(
+    video,
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  capturedDataUrl =
+    canvas.toDataURL(
+      'image/jpeg',
+      0.55
+    );
+
+
+  capturedWidth = width;
+  capturedHeight = height;
+
+
+  const preview =
+    document.getElementById('preview');
+
+
+  preview.src =
+    capturedDataUrl;
+
+
+  stopStream();
+
+
+  hide('video');
+  show('preview');
+
+  hide('btnCapture');
+
+  show('btnUse');
+  show('btnRetake');
+
+}
+
+
+function retake() {
+
+  capturedDataUrl = '';
+  capturedWidth = 0;
+  capturedHeight = 0;
+
+
+  document.getElementById(
+    'preview'
+  ).src = '';
+
+
+  hide('preview');
+
+
+  show('btnStart');
+
+  hide('btnUse');
+  hide('btnRetake');
+
+}
+
+
+
+// ============================================================================
+// RETURN TO MAIN WEB APP
+// ============================================================================
+
+function sendPhotoBack() {
+
+  if (!capturedDataUrl) {
+
+    return showMessage(
+      'ยังไม่มีภาพที่ถ่าย'
+    );
+
+  }
+
+
+  if (!window.opener) {
+
+    return showMessage(
+      'ไม่พบหน้าระบบหลัก กรุณาปิดหน้านี้และเปิดกล้องจากปุ่มใน BI Alcohol Check'
+    );
+
+  }
+
+
+  window.opener.postMessage(
+    {
+      type: 'BI_ALCOHOL_CAMERA_CAPTURE',
+      dataUrl: capturedDataUrl,
+      width: capturedWidth,
+      height: capturedHeight,
+    },
+    '*'
+  );
+
+
+  setTimeout(
+    function () {
+      window.close();
+    },
+    250
+  );
+
+}
+
+
+function closeCamera() {
+
+  stopStream();
+
+  window.close();
+
+}
+
+
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+function stopStream() {
+
+  if (stream) {
+
+    stream
+      .getTracks()
+      .forEach(
+        function (track) {
+          track.stop();
+        }
+      );
+
+    stream = null;
+
+  }
+
+
+  const video =
+    document.getElementById('video');
+
+
+  if (video) {
+
+    video.srcObject = null;
+
+  }
+
+}
+
+
+function isInAppBrowser() {
+
+  const ua =
+    navigator.userAgent || '';
+
+
+  return /Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(
+    ua
+  );
+
+}
+
+
+function showMessage(text) {
+
+  const box =
+    document.getElementById('message');
+
+
+  box.textContent = text;
+
+  show('message');
+
+}
+
+
+function clearMessage() {
+
+  const box =
+    document.getElementById('message');
+
+
+  box.textContent = '';
+
+  hide('message');
+
+}
+
+
+function show(id) {
+
+  const el =
+    document.getElementById(id);
+
+
+  if (el) {
+
+    el.classList.remove(
+      'hidden'
+    );
+
+  }
+
+}
+
+
+function hide(id) {
+
+  const el =
+    document.getElementById(id);
+
+
+  if (el) {
+
+    el.classList.add(
+      'hidden'
+    );
+
+  }
+
+}
+
+</script>
+
+</body>
+</html>
