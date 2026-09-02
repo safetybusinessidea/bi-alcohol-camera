@@ -61,7 +61,7 @@
       position: relative;
       overflow: hidden;
       width: 100%;
-      aspect-ratio: 4 / 3;
+      aspect-ratio: 3 / 4;
       background: #000;
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -87,7 +87,7 @@
 
     .guide {
       position: absolute;
-      inset: 10%;
+      inset: 7% 8% 9%;
       border: 2px dashed rgba(255, 255, 255, .78);
       border-radius: 14px;
       pointer-events: none;
@@ -502,35 +502,80 @@ function capturePhoto() {
   }
 
 
-  const maxWidth = 1000;
+  /*
+   * V5:
+   * บันทึกภาพเป็นสัดส่วน 3:4 แนวตั้ง
+   * ให้ตรงกับกรอบ Preview ที่ผู้ใช้เห็น
+   *
+   * ถ้า stream จากกล้องกว้างเกิน จะ crop ซ้าย/ขวา
+   * ถ้า stream สูงเกิน จะ crop บน/ล่าง
+   */
+  const targetRatio = 3 / 4;
 
-
-  let width =
+  const sourceWidth =
     video.videoWidth;
 
-
-  let height =
+  const sourceHeight =
     video.videoHeight;
 
+  const sourceRatio =
+    sourceWidth / sourceHeight;
 
-  if (width > maxWidth) {
 
-    height =
+  let sx = 0;
+  let sy = 0;
+  let sw = sourceWidth;
+  let sh = sourceHeight;
+
+
+  if (sourceRatio > targetRatio) {
+
+    // Source กว้างเกิน -> crop ซ้าย/ขวา
+    sw =
       Math.round(
-        height * maxWidth / width
+        sourceHeight *
+        targetRatio
       );
 
-    width = maxWidth;
+    sx =
+      Math.round(
+        (sourceWidth - sw) / 2
+      );
+
+  } else if (sourceRatio < targetRatio) {
+
+    // Source สูงเกิน -> crop บน/ล่าง
+    sh =
+      Math.round(
+        sourceWidth /
+        targetRatio
+      );
+
+    sy =
+      Math.round(
+        (sourceHeight - sh) / 2
+      );
 
   }
+
+
+  /*
+   * จำกัดขนาดเพื่อไม่ให้ไฟล์ใหญ่เกิน
+   * 900 x 1200 = 3:4
+   */
+  const outputWidth = 900;
+  const outputHeight = 1200;
 
 
   const canvas =
     document.getElementById('canvas');
 
 
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width =
+    outputWidth;
+
+  canvas.height =
+    outputHeight;
 
 
   const ctx =
@@ -541,29 +586,35 @@ function capturePhoto() {
 
 
   /*
-   * สำคัญ:
-   * ไม่กลับด้านภาพใน Canvas
-   * ต่อให้หน้า Preview กล้องหน้าเป็นกระจก
-   * ภาพหลักฐานจริงจะยังอ่านค่าบนเครื่องตรวจได้ถูกทิศ
+   * ไม่ Mirror ภาพจริง
+   * แม้ Preview กล้องหน้าจะเป็นกระจก
+   * เพื่อให้ตัวเลขบนเครื่องตรวจอ่านถูกทิศ
    */
   ctx.drawImage(
     video,
+    sx,
+    sy,
+    sw,
+    sh,
     0,
     0,
-    width,
-    height
+    outputWidth,
+    outputHeight
   );
 
 
   capturedDataUrl =
     canvas.toDataURL(
       'image/jpeg',
-      0.55
+      0.52
     );
 
 
-  capturedWidth = width;
-  capturedHeight = height;
+  capturedWidth =
+    outputWidth;
+
+  capturedHeight =
+    outputHeight;
 
 
   const preview =
@@ -587,7 +638,6 @@ function capturePhoto() {
   show('btnRetake');
 
 }
-
 
 function retake() {
 
